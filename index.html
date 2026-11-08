@@ -1,0 +1,279 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Homeserver</title>
+  <meta name="robots" content="noindex,nofollow"/>
+  <meta name="theme-color" content="#0c0b12"/>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>⏻</text></svg>"/>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=VT323&family=DM+Mono:ital@0;1&display=swap" rel="stylesheet">
+
+  <style>
+    /* ===== Theme: edit colors here. Triplets are "R G B" so they can take opacity. ===== */
+    :root {
+      --bg: #0c0b12;
+      --text: #e0d8ff;
+      --muted: #6b5f8a;
+      --asleep: 139 92 246;   /* purple */
+      --awake: 60 200 140;    /* green  */
+      --busy: 240 176 74;     /* amber  */
+      --error: 255 80 110;    /* red    */
+      --display: 'VT323', 'Courier New', monospace;
+      --mono: 'DM Mono', ui-monospace, 'Courier New', monospace;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    /* Everything is in rem; the root size scales from phone to 4K. */
+    html { font-size: clamp(16px, 0.55vw + 12px, 30px); }
+
+    body {
+      --c: var(--asleep);
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--mono);
+      min-height: 100vh; min-height: 100dvh;
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      padding: 2.5rem 1.5rem;
+      overflow-x: hidden;
+    }
+    body[data-state="online"]        { --c: var(--awake); }
+    body[data-state="booting"],
+    body[data-state="shutting_down"],
+    body[data-armed="1"]             { --c: var(--busy); }
+    body[data-state="unreachable"]   { --c: var(--error); }
+
+    body::before {
+      content: ''; position: fixed; top: 50%; left: 50%;
+      width: 40rem; height: 40rem; max-width: 140vw;
+      transform: translate(-50%, -50%); pointer-events: none;
+      background: radial-gradient(circle, rgb(var(--c) / 0.15) 0%, transparent 70%);
+    }
+
+    .container { position: relative; text-align: center; max-width: 30rem; width: 100%; }
+
+    .pill {
+      display: inline-flex; align-items: center; gap: 0.45rem;
+      font-family: var(--display); font-size: 1rem; letter-spacing: 0.15em; text-transform: uppercase;
+      color: rgb(var(--c)); border: 1px solid rgb(var(--c) / 0.4);
+      border-radius: 100px; padding: 0.4rem 0.9rem; margin-bottom: 2.5rem;
+      transition: color 0.3s, border-color 0.3s;
+    }
+    .dot { width: 0.4rem; height: 0.4rem; border-radius: 50%; background: rgb(var(--c)); animation: blink 1.8s ease-in-out infinite; }
+    body[data-state="booting"] .dot, body[data-state="shutting_down"] .dot { animation-duration: 0.5s; }
+    body[data-state="unreachable"] .dot { animation: none; }
+    @keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0.2; } }
+
+    h1 {
+      font-family: var(--display); font-weight: 400;
+      font-size: clamp(3.4rem, 15vw, 6.5rem); letter-spacing: 0.05em; line-height: 1; margin-bottom: 1rem;
+      background: linear-gradient(140deg, #fff 40%, #b89dff);
+      -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent;
+    }
+    .tagline { font-family: var(--display); font-size: 1.3rem; line-height: 1.35; color: var(--muted); margin-bottom: 3rem; min-height: 2.7em; }
+
+    /* The power button */
+    .power {
+      position: relative; width: 8.5rem; height: 8.5rem; border-radius: 50%;
+      border: 1px solid rgb(var(--c) / 0.5); background: rgb(var(--c) / 0.08); color: rgb(var(--c));
+      cursor: pointer; display: inline-flex; align-items: center; justify-content: center;
+      transition: all 0.25s ease; -webkit-tap-highlight-color: transparent;
+    }
+    .power svg { width: 2.8rem; height: 2.8rem; }
+    .power::before, .power::after {
+      content: ''; position: absolute; inset: -1px; border-radius: 50%;
+      border: 1px solid rgb(var(--c) / 0.5); opacity: 0; pointer-events: none;
+    }
+    body[data-state="offline"] .power::before, body[data-state="online"] .power::before { animation: ring 3s ease-out infinite; }
+    body[data-state="offline"] .power::after,  body[data-state="online"] .power::after  { animation: ring 3s 1.5s ease-out infinite; }
+    @keyframes ring { 0% { transform: scale(1); opacity: 0.6; } 100% { transform: scale(1.6); opacity: 0; } }
+    .power:hover:not(:disabled) { background: rgb(var(--c) / 0.2); transform: translateY(-3px); box-shadow: 0 0 2.5rem rgb(var(--c) / 0.35); }
+    .power:active:not(:disabled) { transform: scale(0.97); }
+    .power:focus-visible { outline: 2px solid #c4aaff; outline-offset: 6px; }
+    .power:disabled { cursor: default; }
+    body[data-spin="1"] .power svg { animation: spin 1s linear infinite; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    .power-label { font-family: var(--display); font-size: 1.15rem; letter-spacing: 0.05em; color: rgb(var(--c) / 0.85); margin-top: 1.4rem; min-height: 1.4em; }
+
+    .message {
+      --m: var(--error);
+      display: none; margin: 1.75rem auto 0; max-width: 26rem; text-align: left;
+      font-size: 0.85rem; line-height: 1.6; border-radius: 0.7rem; padding: 0.9rem 1.1rem;
+      color: rgb(var(--m)); background: rgb(var(--m) / 0.07); border: 1px solid rgb(var(--m) / 0.35);
+    }
+    .message.show { display: block; animation: fade 0.4s ease both; }
+    .message.warn { --m: var(--busy); }
+    .message.ok { --m: var(--awake); }
+    .message strong { display: block; font-family: var(--display); font-weight: 400; font-size: 1.2rem; letter-spacing: 0.04em; margin-bottom: 0.2rem; }
+    @keyframes fade { from { opacity: 0; transform: translateY(0.5rem); } to { opacity: 1; transform: none; } }
+
+    .log { list-style: none; margin: 2.5rem auto 0; max-width: 26rem; font-size: 0.75rem; color: var(--muted); text-align: left; }
+    .log li { display: flex; gap: 0.7rem; padding: 0.3rem 0; border-top: 1px solid rgb(100 60 200 / 0.15); }
+    .log li:last-child { border-bottom: 1px solid rgb(100 60 200 / 0.15); }
+    .log time { flex: none; }
+    .log .ok { color: rgb(var(--awake)); }
+    .log .err { color: rgb(var(--error)); }
+
+    @media (max-height: 640px) { .pill { margin-bottom: 1.5rem; } .tagline { margin-bottom: 1.75rem; } }
+    @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; } }
+  </style>
+</head>
+<body data-state="loading">
+  <!-- Inline icons (no external icon font needed) -->
+  <svg width="0" height="0" style="position:absolute" aria-hidden="true">
+    <symbol id="i-power" viewBox="0 0 24 24"><path d="M12 2v10"/><path d="M18.4 6.6a9 9 0 1 1-12.8 0"/></symbol>
+    <symbol id="i-spin" viewBox="0 0 24 24"><path d="M21 12a9 9 0 1 1-6.2-8.55"/></symbol>
+    <symbol id="i-warn" viewBox="0 0 24 24"><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/><path d="M12 9v4M12 17h.01"/></symbol>
+  </svg>
+
+  <main class="container">
+    <div class="pill"><span class="dot"></span><span id="pill"></span></div>
+    <h1>Homeserver</h1>
+    <p class="tagline" id="tagline"></p>
+
+    <button class="power" id="btn" type="button">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><use id="icon" href="#i-power"/></svg>
+    </button>
+    <p class="power-label" id="label" aria-live="polite"></p>
+
+    <div class="message" id="message" role="status" aria-live="polite"></div>
+    <ul class="log" id="log" aria-label="Recent events"></ul>
+  </main>
+
+  <script>
+    /* ===== Text: edit the wording here. ===== */
+    const TEXT = {
+      loading:       { pill: 'Checking',      tag: 'Knocking on the server\'s door...',                          label: 'Checking...' },
+      offline:       { pill: 'Asleep',        tag: 'It\'s napping in the corner. Press the button and it\'ll wake up and get back to work.', label: 'Wake it up' },
+      booting:       { pill: 'Booting',       tag: 'Stretching, yawning, spinning up the disks. Won\'t be long.', label: 'Booting' },
+      online:        { pill: 'Awake',         tag: 'Up and humming. Send it back to bed when you\'re done.',      label: 'Shut it down' },
+      shutting_down: { pill: 'Shutting down', tag: 'Saving its work and turning off the lights.',                 label: 'Shutting down' },
+      unreachable:   { pill: 'Unreachable',   tag: 'Can\'t reach the jumphost phone, so the server\'s state is unknown.', label: 'Retry' }
+    };
+    const CONFIRM_LABEL = 'Tap again to shut down';
+    const CONFIRM_WINDOW_MS = 4000;     // how long the second tap stays valid
+    const POLL_FAST_MS = 2000;          // while booting / shutting down
+    const POLL_SLOW_MS = 8000;          // otherwise
+
+    const $ = id => document.getElementById(id);
+    const body = document.body, btn = $('btn'), icon = $('icon'), label = $('label');
+    let state = 'loading', elapsed = null, armed = false, busy = false, armTimer = null, pollTimer = null;
+
+    function fmt(s) { return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0'); }
+
+    function render() {
+      const t = TEXT[state];
+      const transitional = state === 'booting' || state === 'shutting_down';
+      const spinning = busy || transitional || state === 'loading';
+      body.dataset.state = state;
+      body.dataset.armed = armed ? '1' : '0';
+      body.dataset.spin = spinning ? '1' : '0';
+      $('pill').textContent = t.pill;
+      $('tagline').textContent = t.tag;
+      label.textContent = armed ? CONFIRM_LABEL
+        : busy ? 'Working...'
+        : transitional && elapsed != null ? t.label + '... ' + fmt(elapsed)
+        : t.label;
+      icon.setAttribute('href', spinning ? '#i-spin' : state === 'unreachable' ? '#i-warn' : '#i-power');
+      btn.disabled = busy || transitional || state === 'loading';
+      btn.setAttribute('aria-label', label.textContent);
+    }
+
+    function show(kind, title, detail) {
+      const m = $('message');
+      m.className = 'message show ' + kind;
+      m.replaceChildren();
+      const s = document.createElement('strong'); s.textContent = title; m.append(s);
+      if (detail) m.append(document.createTextNode(detail));
+    }
+    function hide() { $('message').className = 'message'; }
+
+    function addLog(ok, text) {
+      const li = document.createElement('li'), t = document.createElement('time'), s = document.createElement('span');
+      t.textContent = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+      s.className = ok ? 'ok' : 'err'; s.textContent = text;
+      li.append(t, s); $('log').prepend(li);
+      while ($('log').children.length > 6) $('log').lastChild.remove();
+    }
+
+    /* Talk to the phone. Throws Error with a message that is safe to show. */
+    async function api(path, method = 'GET') {
+      let res;
+      try {
+        res = await fetch(path, { method, headers: { 'X-Requested-With': 'wol', 'Accept': 'application/json' },
+                                  credentials: 'same-origin', redirect: 'manual', cache: 'no-store' });
+      } catch (_) {
+        throw new Error('Could not reach the server. Check your connection and that the tunnel is running on the phone.');
+      }
+      if (res.type === 'opaqueredirect') throw new Error('Your Cloudflare Access session has expired. Reload the page and log in again.');
+      if (res.status === 401 || res.status === 403) throw new Error('Not allowed (HTTP ' + res.status + '). Reload the page and log in again.');
+      if (res.status === 502 || res.status === 504) throw new Error('The tunnel is up but the wake service is not answering (HTTP ' + res.status + '). Check the "wol" service on the phone.');
+      let data = null;
+      try { data = await res.json(); } catch (_) {}
+      if (!res.ok) throw new Error((data && data.error) || 'The server answered with HTTP ' + res.status + '.');
+      return data;
+    }
+
+    async function refresh() {
+      clearTimeout(pollTimer);
+      const before = state;
+      try {
+        const s = await api('/api/status');
+        state = s.state; elapsed = s.elapsed;
+        if (s.warning) { show('warn', 'Heads up', s.warning); addLog(false, s.warning); }
+        else if (before === 'unreachable') hide();
+        if (before !== state && before !== 'loading') {
+          if (state === 'online') addLog(true, 'Homeserver is awake');
+          if (state === 'offline' && before === 'shutting_down') addLog(true, 'Homeserver is off');
+        }
+      } catch (e) {
+        if (state !== 'unreachable') addLog(false, 'Lost contact with the phone');
+        state = 'unreachable'; elapsed = null;
+        show('err', 'Unreachable', e.message);
+      }
+      render();
+      schedule();
+    }
+
+    function schedule() {
+      clearTimeout(pollTimer);
+      if (document.hidden) return;   // resumes on visibilitychange
+      const fast = state === 'booting' || state === 'shutting_down';
+      pollTimer = setTimeout(refresh, fast ? POLL_FAST_MS : POLL_SLOW_MS);
+    }
+
+    async function act(path, startedMsg) {
+      busy = true; armed = false; hide(); render();
+      try {
+        await api(path, 'POST');
+        addLog(true, startedMsg);
+      } catch (e) {
+        show('err', 'That didn\'t work', e.message);
+        addLog(false, e.message);
+      }
+      busy = false;
+      await refresh();
+    }
+
+    function disarm() { armed = false; clearTimeout(armTimer); render(); }
+
+    btn.addEventListener('click', () => {
+      if (state === 'unreachable') { state = 'loading'; render(); return refresh(); }
+      if (state === 'offline') return act('/api/wake', 'Magic packet sent');
+      if (state === 'online') {
+        if (!armed) { armed = true; render(); armTimer = setTimeout(disarm, CONFIRM_WINDOW_MS); return; }
+        clearTimeout(armTimer);
+        return act('/api/shutdown', 'Shutdown command sent');
+      }
+    });
+
+    document.addEventListener('visibilitychange', () => { if (!document.hidden) refresh(); else clearTimeout(pollTimer); });
+
+    render();
+    refresh();
+  </script>
+</body>
+</html>

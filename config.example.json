@@ -1,0 +1,12 @@
+{
+  "port": 8080,
+  "mac": "AA:BB:CC:DD:EE:FF",
+  "broadcast": "192.168.1.255",
+  "ssh_target": "homeserver",
+  "shutdown_command": "sudo shutdown now",
+  "status_host": "192.168.1.x",
+  "status_port": 22,
+  "boot_timeout_s": 180,
+  "shutdown_timeout_s": 120,
+  "ssh_timeout_s": 10
+}

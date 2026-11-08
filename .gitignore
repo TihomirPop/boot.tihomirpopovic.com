@@ -1,0 +1,19 @@
+# Your real settings (copy config.example.json to config.json)
+config.json
+
+# Secrets that should never be in this folder, just in case
+*.pem
+*.key
+id_*
+token
+.cloudflared/
+.ssh/
+
+# Python
+__pycache__/
+*.pyc
+
+# Editor / OS
+.vscode/
+.idea/
+.DS_Store
